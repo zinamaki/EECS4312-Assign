@@ -1,0 +1,26 @@
+Isolette[delta:posreal]: THEORY
+
+BEGIN
+importing Time[delta]
+
+%monitored variables
+
+m_tm: VAR [DTIME -> {n:real| n >= 68.0 AND n <= 105.0}] % current temperature of isolette
+m_dl: VAR [DTIME -> {n:integer | n >= 97 AND n <= 99}]  % desired lower temparature by operator
+m_dh: VAR [DTIME -> {n:integer | n >= 98 AND n <= 100}] % desired higher temperature by operator
+m_al: VAR [DTIME -> {n:integer | n>= 93 AND n <= 98}] % lower alarm temperature set by operator
+m_ah: VAR [DTIME -> {n:integer | n>= 99 AND n <= 103}] % higher alarm temperature set by operator
+m_st: TYPE = {valid, invalid} % status of sensor and operator settings
+m_sw: TYPE = {on, off} % switch set by operator
+
+c_hc: TYPE = {on,off} % heat control: command to turn heat source on or off
+c_td:VAR [DTIME -> {n:integer | n = 0 AND n >= 68 AND n <= 105}] % Displayed temperature of isolette
+c_al:TYPE = {off, on} % Sound alarm to call nurse
+c_md:TYPE = {off, init, normal, failed} % mode of isolette operation
+c_ms:TYPE = {"Danger"} %messages to display to nurse
+
+
+
+
+
+END Isolette
