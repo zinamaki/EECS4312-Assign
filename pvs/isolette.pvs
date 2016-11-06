@@ -13,15 +13,43 @@ m_ah: [DTIME -> {n:integer | n>= 99 AND n <= 103}] % higher alarm temperature se
 m_st: TYPE = {valid, invalid} % status of sensor and operator settings
 m_sw: TYPE = {on, off} % switch set by operator
 
-c_hc: TYPE = {on,off} % heat control: command to turn heat source on or off
+HEAT:TYPE = {on, off}
+c_hc: [DTIME -> HEAT] % heat control: command to turn heat source on or off
 c_td:[DTIME -> {n:integer | n = 0 AND n >= 68 AND n <= 105}] % Displayed temperature of isolette
 alarm:TYPE = {off, on} % Sound alarm to call nurse
 monitor_mode:TYPE = {off, init, normal, failed} % mode of isolette operation
 c_ms:TYPE = {Danger} %messages to display to nurse
+regulator_status:TYPE = {init, on, failed}
+c_display: [DTIME -> integer]
 
 c_al: [DTIME -> alarm]
 c_md: [DTIME -> monitor_mode]
+c_rs: [DTIME -> regulator_status] % regulator status
 
+
+status_ft(i):bool=
+   COND
+	i = 0 -> c_md(i) = off,
+	i > 0 -> COND
+	    c_md(i) = init -> c_rs(i)= init,
+	    c_md(i) = normal -> c_rs(i) = on AND c_display(i) = floor(i + 0.5),
+	    c_md(i) = failed -> c_rs(i) = failed
+	ENDCOND
+   ENDCOND
+
+heat_ft(i): bool = 
+   COND
+	i = 0 -> c_md(i) = off AND c_hc(i) = off,
+	i > 0 -> COND
+	  c_md(i) = init -> c_hc(i) = off,
+	  c_md(i) = normal -> COND
+	       m_tm(i) < m_dl(i) -> c_hc(i) = on,
+	       m_tm(i) > m_dh(i) -> c_hc(i) = off,
+	       m_tm(i) >= m_dl(i) AND m_tm(i) <= m_dh(i) -> c_hc(i) = c_hc(i-1) 
+	  ENDCOND,
+	  c_md(i) = failed -> c_hc(i) = off
+	ENDCOND
+   ENDCOND
 
 alarm_ft(i): bool =
     %% Complete This
