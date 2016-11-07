@@ -26,13 +26,18 @@ c_al: [DTIME -> alarm]
 c_md: [DTIME -> monitor_mode]
 c_rs: [DTIME -> regulator_status] % regulator status
 
+reg_interface_failure: [DTIME -> bool]
+reg_internal_failure: [DTIME -> bool]
+modes:TYPE = {init, normal,failed}
+reg_mode: [DTIME -> modes]
+max_response_time:int = 0.5
 
 status_ft(i):bool=
    COND
 	i = 0 -> c_md(i) = off,
 	i > 0 -> COND
 	    c_md(i) = init -> c_rs(i)= init,
-	    c_md(i) = normal -> c_rs(i) = on AND c_display(i) = floor(i + 0.5),
+	    c_md(i) = normal -> c_rs(i) = on AND c_display(i) = floor(i+0.5),
 	    c_md(i) = failed -> c_rs(i) = failed
 	ENDCOND
    ENDCOND
@@ -41,7 +46,8 @@ heat_ft(i): bool =
    COND
 	i = 0 -> c_md(i) = off AND c_hc(i) = off,
 	i > 0 -> COND
-	  c_md(i) = init -> c_hc(i) = off,
+	  c_md(i) = init AND m_tm(i) < m_dl(i) -> c_hc(i) = on,
+	  c_md(i) = init AND m_tm(i) > m_dh(i) -> c_hc(i) = off,
 	  c_md(i) = normal -> COND
 	       m_tm(i) < m_dl(i) -> c_hc(i) = on,
 	       m_tm(i) > m_dh(i) -> c_hc(i) = off,
@@ -51,26 +57,18 @@ heat_ft(i): bool =
 	ENDCOND
    ENDCOND
 
-alarm_ft(i): bool =
-    %% Complete This
-    %% Draw a function table first
-    %% Minimize the function table but ensure it is complete and disjoint
-    COND
-	i = 0 -> c_md(i) = off AND c_al(i) = off,
-	i > 0 -> COND
-		c_md(i-1) = init -> c_al(i) = off,
-		c_md(i-1) = normal ->
-			COND
-				m_tm(i) < m_dl(i) OR m_tm(i) > m_dh(i) -> c_al(i) = on,
-				m_tm(i) >= m_al(i) ANd m_tm(i) < m_al(i) + 0.5 -> c_al(i) = c_al(i-1), 
-				m_tm(i) > m_ah(i)+0.5 AND m_tm(i) <= m_ah(i) -> c_al(i) = c_al(i-1),
-				m_tm(i) >= m_al(i)+0.5 AND m_tm(i) <= m_ah(i)-0.5 -> c_al(i) = off
-			ENDCOND
-		,c_md(i-1) = failed -> c_al(i) = on
-	      ENDCOND
-	ENDCOND	
-   
+conj₁: CONJECTURE
+       FORALL (i:DTIME):
+       	      m_al(i) < m_dl(i)
+conj₂: CONJECTURE
+       FORALL (i:DTIME):
+       	      m_dl(i) < m_dh(i)
+conj₃: CONJECTURE
+       FORALL (i:DTIME):
+       	      m_ah(i) > m_dh(i)
 
-
+use_case1: bool =
+   m_sw(0) = on AND c_rs(0)= init
+   => 
 
 END Isolette
