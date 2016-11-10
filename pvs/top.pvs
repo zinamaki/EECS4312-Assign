@@ -3,8 +3,6 @@
 top : THEORY
 BEGIN
   IMPORTING Time
-  IMPORTING Hysteresis_tcc
-  IMPORTING Hysteresis
-  IMPORTING Limits_Alarm
+  IMPORTING Isolette
 END top
 
