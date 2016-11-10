@@ -5,57 +5,110 @@ importing Time[delta]
 
 %monitored variables
 i: VAR DTIME
+
 m_tm: [DTIME -> {n:real| n >= 68.0 AND n <= 105.0}] % current temperature of isolette
 m_dl: [DTIME -> {n:integer | n >= 97 AND n <= 99}]  % desired lower temparature by operator
 m_dh: [DTIME -> {n:integer | n >= 98 AND n <= 100}] % desired higher temperature by operator
 m_al: [DTIME -> {n:integer | n>= 93 AND n <= 98}] % lower alarm temperature set by operator
 m_ah: [DTIME -> {n:integer | n>= 99 AND n <= 103}] % higher alarm temperature set by operator
-m_st: TYPE = {valid, invalid} % status of sensor and operator settings
-m_sw: TYPE = {on, off} % switch set by operator
+
+STATUS: TYPE = {valid, invalid} % status of sensor and operator settings
+m_st: [DTIME -> STATUS]
+SWITCH: TYPE = {on, off}
+m_sw: [DTIME -> SWITCH] % switch set by operator
 
 HEAT:TYPE = {on, off}
 c_hc: [DTIME -> HEAT] % heat control: command to turn heat source on or off
 c_td:[DTIME -> {n:integer | n = 0 AND n >= 68 AND n <= 105}] % Displayed temperature of isolette
+MESSAGES:TYPE = {OK, TooCold, TooHot, SensorIssue} %messages to display to nurse
+c_ms: [DTIME -> MESSAGES]
+
 alarm:TYPE = {off, on} % Sound alarm to call nurse
-monitor_mode:TYPE = {off, init, normal, failed} % mode of isolette operation
-c_ms:TYPE = {Danger} %messages to display to nurse
-regulator_status:TYPE = {init, on, failed}
-c_display: [DTIME -> integer]
-
 c_al: [DTIME -> alarm]
+c_al_func(i:DTIME): bool = c_al(i) = on
+monitor_mode:TYPE = {off, init, normal, failed} % mode of isolette operation
 c_md: [DTIME -> monitor_mode]
-c_rs: [DTIME -> regulator_status] % regulator status
 
-reg_interface_failure: [DTIME -> bool]
-reg_internal_failure: [DTIME -> bool]
-modes:TYPE = {init, normal,failed}
-reg_mode: [DTIME -> modes]
-max_response_time:int = 0.5
-
-status_ft(i):bool=
-   COND
-	i = 0 -> c_md(i) = off,
+mode_ft(i):bool=
+  COND
+	i=0 -> c_md(i) = off,
 	i > 0 -> COND
-	    c_md(i) = init -> c_rs(i)= init,
-	    c_md(i) = normal -> c_rs(i) = on AND c_display(i) = floor(i+0.5),
-	    c_md(i) = failed -> c_rs(i) = failed
+	   m_sw(i) = off -> c_md(i) = off,
+	   m_sw(i) = on -> COND
+	   	c_md(i-1) = init ->COND 
+		    m_st(i) = valid AND m_dl(i) <= m_tm(i) <= m_dh(i) AND m_al(i) < m_dl(i) < m_dh(i) < m_ah(i) -> c_md(i) = normal, 
+		    NOT(m_st(i) = valid AND m_dl(i) <= m_tm(i) <= m_dh(i) AND m_al(i) < m_dl(i) < m_dh(i) < m_ah(i)) -> c_md(i) = c_md(i-1)
+		   ENDCOND,
+		c_md(i-1) = normal -> COND
+	            m_st(i) = invalid -> c_md(i) = failed,
+		    m_st(i) = valid -> c_md(i) = c_md(i-1)
+		   ENDCOND,
+		c_md(i-1) = failed -> COND
+	            m_st(i) = invalid -> c_md(i) = c_md(i-1),
+		    m_st(i) = valid -> c_md(i) = normal
+	   	   ENDCOND   
+		ENDCOND
 	ENDCOND
+
+  ENDCOND
+
+display_ft(i):bool=
+   COND
+	i = 0 -> c_td(i) = 0,
+	i > 0 -> COND
+	    c_md(i-1) = off -> c_td(i) = 0,
+	    c_md(i-1) = init -> c_td(i) = 0,
+	    c_md(i-1) = normal -> c_td(i) = floor(m_tm(i) + 0.5),
+	    c_md(i-1) = failed -> c_td(i) = 0
+	ENDCOND
+	
    ENDCOND
 
 heat_ft(i): bool = 
    COND
-	i = 0 -> c_md(i) = off AND c_hc(i) = off,
+	i = 0 -> c_hc(i) = off,
 	i > 0 -> COND
-	  c_md(i) = init AND m_tm(i) < m_dl(i) -> c_hc(i) = on,
-	  c_md(i) = init AND m_tm(i) > m_dh(i) -> c_hc(i) = off,
-	  c_md(i) = normal -> COND
+	  c_md(i-1) = off -> c_hc(i) = on,
+	  c_md(i-1) = init OR c_md(i-1) = normal -> COND
 	       m_tm(i) < m_dl(i) -> c_hc(i) = on,
-	       m_tm(i) > m_dh(i) -> c_hc(i) = off,
-	       m_tm(i) >= m_dl(i) AND m_tm(i) <= m_dh(i) -> c_hc(i) = c_hc(i-1) 
+  	       m_tm(i) > m_dh(i) -> c_hc(i) = off,
+	       m_dl(i) <= m_tm(i) <= m_dl(i) -> c_hc(i) = c_hc(i-1) 
 	  ENDCOND,
-	  c_md(i) = failed -> c_hc(i) = off
+	  c_md(i-1) = failed -> c_hc(i) = off
 	ENDCOND
    ENDCOND
+
+alarm_ft(i): bool=
+    COND
+	i = 0 -> c_al(i) = off,
+	i > 0 -> COND
+	  m_al(i) <= m_tm(i) < m_al(i) + 0.5 OR m_ah(i) - 0.5 < m_tm(i) <= m_ah(i) -> c_al(i) = c_al(i-1),
+	  NOT (m_al(i) <= m_tm(i) < m_al(i) + 0.5 OR m_ah(i) - 0.5 < m_tm(i) <= m_ah(i)) -> COND
+	      m_tm(i) < m_al(i) OR m_tm(i) > m_ah(i) OR m_st(i) = invalid -> c_al(i) = on,
+	      NOT(m_tm(i) < m_al(i) OR m_tm(i) > m_ah(i) OR m_st(i) = invalid) -> COND
+	      	   c_al(i-1) = off -> c_al(i) = c_al(i-1),
+		   c_al(i-1) = on -> COND
+		   	 held_for(c_al_func, 10)(i-1) -> c_al(i) = off,
+			 NOT held_for(c_al_func, 10)(i-1) -> c_al(i) = on
+		   ENDCOND
+	      ENDCOND
+	  ENDCOND
+	ENDCOND
+
+    ENDCOND
+	 
+message_ft(i):bool=
+    COND
+	i = 0 -> c_ms(i) = OK,
+	i > 0 -> COND
+	    m_tm(i) > m_ah(i) -> c_ms(i) = TooHot,
+	    m_tm(i) < m_al(i) -> c_ms(i) = TooCold,
+	    m_st(i) = invalid -> c_ms(i) = SensorIssue,
+	    ELSE -> c_ms(i) = OK
+	ENDCOND
+
+    ENDCOND
+
 
 conj₁: CONJECTURE
        FORALL (i:DTIME):
@@ -67,8 +120,11 @@ conj₃: CONJECTURE
        FORALL (i:DTIME):
        	      m_ah(i) > m_dh(i)
 
+failed_conj: CONJECTURE
+       FORALL (i:DTIME):
+       	      c_md(i) = failed IMPLIES c_hc(i) = off AND c_al(i) = on
+
 use_case1: bool =
-   m_sw(0) = on AND c_rs(0)= init
-   => 
+   m_sw(0) = on 
 
 END Isolette
